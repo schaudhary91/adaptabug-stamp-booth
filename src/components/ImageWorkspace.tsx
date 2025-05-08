@@ -9,8 +9,9 @@ import { CameraCapture } from './CameraCapture';
 import { ImageControls } from './ImageControls';
 import { StampSelector } from './StampSelector';
 import { Card, CardContent } from '@/components/ui/card';
-import { ImageIcon, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button'; // Added for potential loading state on download
+import { ImageIcon, CheckCircle, AlertTriangle } from 'lucide-react';
+
+type AppStep = 'awaitingImage' | 'editingImage';
 
 export function ImageWorkspace() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -21,6 +22,7 @@ export function ImageWorkspace() {
   const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
   const [currentError, setCurrentError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [appStep, setAppStep] = useState<AppStep>('awaitingImage');
 
 
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -47,6 +49,7 @@ export function ImageWorkspace() {
         setPlacedStamps([]); // Clear stamps on new image
         setSelectedStampId(null);
         setNextStampZIndex(1);
+        setAppStep('editingImage');
         toast({ title: 'Image Uploaded', description: 'Your image is ready to be stamped!', className: 'bg-accent text-accent-foreground' });
       };
       reader.readAsDataURL(file);
@@ -66,11 +69,12 @@ export function ImageWorkspace() {
     setSelectedStampId(null);
     setNextStampZIndex(1);
     setIsCameraOpen(false);
+    setAppStep('editingImage');
     toast({ title: 'Image Captured', description: 'Photo taken successfully!', className: 'bg-accent text-accent-foreground' });
   };
 
   const handleStampSelect = (stampConfig: StampConfig) => {
-    if (!imageUrl) {
+    if (!imageUrl || appStep === 'awaitingImage') {
       toast({ title: 'No Image', description: 'Please upload or capture an image first.', variant: 'destructive' });
       setCurrentError('Please upload or capture an image first to add stamps.');
       return;
@@ -79,8 +83,6 @@ export function ImageWorkspace() {
     const workspaceRect = workspaceRef.current?.getBoundingClientRect();
     if (!workspaceRect || !baseImageSize) return;
 
-    // Calculate center position relative to the workspace
-    // Adjust initial placement if image is smaller than stamp
     const initialX = Math.max(0, (workspaceRect.width - stampConfig.width) / 2);
     const initialY = Math.max(0, (workspaceRect.height - stampConfig.height) / 2);
 
@@ -98,7 +100,7 @@ export function ImageWorkspace() {
     };
     setPlacedStamps((prev) => [...prev, newStamp]);
     setNextStampZIndex((prev) => prev + 1);
-    setSelectedStampId(newStamp.id); // Auto-select the new stamp
+    setSelectedStampId(newStamp.id); 
     toast({
       title: `${stampConfig.name} Added!`,
       description: 'Drag, resize, and rotate your new stamp.',
@@ -121,20 +123,30 @@ export function ImageWorkspace() {
   };
 
   const handleWorkspaceClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Deselect stamp if clicking on the workspace background (not on a stamp itself)
     if (e.target === workspaceRef.current || e.target === imageRef.current) {
       setSelectedStampId(null);
     }
   };
 
   const handleDownload = async () => {
-    if (!imageUrl || !workspaceRef.current || !imageRef.current || placedStamps.length === 0) {
-      toast({ title: 'Download Error', description: 'Please add stamps to the image before downloading.', variant: 'destructive' });
-      setCurrentError('Add stamps to the image to enable download.');
+     if (!imageUrl || !workspaceRef.current || !imageRef.current || appStep === 'awaitingImage') {
+      toast({ title: 'Download Error', description: 'Cannot download. Please upload an image and add stamps.', variant: 'destructive' });
+      setCurrentError('Image not ready or no stamps added for download.');
       return;
+    }
+    if (placedStamps.length === 0) {
+       toast({ title: 'Download Error', description: 'Please add stamps to the image before downloading.', variant: 'destructive' });
+       setCurrentError('Add stamps to the image to enable download.');
+       return;
     }
     setCurrentError(null);
     setIsDownloading(true);
+
+    // Deselect stamp before download to remove border/controls
+    setSelectedStampId(null); 
+    // Allow UI to update before starting canvas operations
+    await new Promise(resolve => setTimeout(resolve, 50));
+
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -148,10 +160,8 @@ export function ImageWorkspace() {
     canvas.width = baseImg.naturalWidth;
     canvas.height = baseImg.naturalHeight;
 
-    // Draw base image
     ctx.drawImage(baseImg, 0, 0, baseImg.naturalWidth, baseImg.naturalHeight);
 
-    // Sort stamps by zIndex to draw in correct order
     const sortedStamps = [...placedStamps].sort((a, b) => a.zIndex - b.zIndex);
     
     const imageClientWidth = imageRef.current.clientWidth;
@@ -163,7 +173,7 @@ export function ImageWorkspace() {
     const loadImagePromises = sortedStamps.map(stamp => {
       return new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
-        img.crossOrigin = "anonymous";
+        img.crossOrigin = "anonymous"; 
         img.onload = () => resolve(img);
         img.onerror = (err) => reject(new Error(`Failed to load stamp image: ${stamp.alt}. Error: ${err}`));
         img.src = stamp.imageUrl;
@@ -175,15 +185,12 @@ export function ImageWorkspace() {
 
       loadedStampImages.forEach((stampImg, index) => {
         const stamp = sortedStamps[index];
-        // Calculate position and size on the original image scale
         const sx = stamp.x * scaleX;
         const sy = stamp.y * scaleY;
         const sWidth = stamp.width * scaleX;
         const sHeight = stamp.height * scaleY;
 
         ctx.save();
-        // Translate and rotate context for the stamp
-        // Rotation point should be center of the stamp
         ctx.translate(sx + sWidth / 2, sy + sHeight / 2);
         ctx.rotate((stamp.rotation * Math.PI) / 180);
         ctx.drawImage(stampImg, -sWidth / 2, -sHeight / 2, sWidth, sHeight);
@@ -215,17 +222,17 @@ export function ImageWorkspace() {
     setSelectedStampId(null);
     setNextStampZIndex(1);
     setCurrentError(null);
+    setAppStep('awaitingImage');
     toast({ title: 'Workspace Cleared', description: 'Ready for a new creation!' });
   };
   
-  // Handle drag over and drop for adding stamps
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault(); // Necessary to allow dropping
+    event.preventDefault(); 
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    if (!imageUrl) {
+    if (!imageUrl || appStep === 'awaitingImage') {
       toast({ title: 'No Image', description: 'Please upload or capture an image first.', variant: 'destructive' });
       setCurrentError('Please upload or capture an image first to add stamps.');
       return;
@@ -237,11 +244,9 @@ export function ImageWorkspace() {
     if (stampConfig && workspaceRef.current && baseImageSize) {
       const workspaceRect = workspaceRef.current.getBoundingClientRect();
       
-      // Calculate drop position relative to the workspace/image
       let dropX = event.clientX - workspaceRect.left - (stampConfig.width / 2);
       let dropY = event.clientY - workspaceRect.top - (stampConfig.height / 2);
 
-      // Constrain within workspace bounds
       dropX = Math.max(0, Math.min(dropX, workspaceRect.width - stampConfig.width));
       dropY = Math.max(0, Math.min(dropY, workspaceRect.height - stampConfig.height));
       
@@ -279,6 +284,7 @@ export function ImageWorkspace() {
         isImageLoaded={!!imageUrl}
         hasStamps={placedStamps.length > 0}
         isDownloading={isDownloading}
+        appStep={appStep}
       />
       
       {currentError && (
@@ -293,7 +299,9 @@ export function ImageWorkspace() {
       )}
 
       <div className="container mx-auto py-4 md:py-8 flex-grow flex flex-col gap-4 md:gap-8">
-        <StampSelector onStampSelect={handleStampSelect} selectedStampId={selectedStampId} />
+        {appStep === 'editingImage' && imageUrl && (
+          <StampSelector onStampSelect={handleStampSelect} selectedStampId={selectedStampId} />
+        )}
 
         <Card 
           className="flex-grow shadow-lg overflow-hidden"
@@ -302,7 +310,7 @@ export function ImageWorkspace() {
           onDrop={handleDrop}
         >
           <CardContent ref={workspaceRef} className="relative w-full h-[400px] md:h-[500px] lg:h-[600px] bg-muted/50 flex items-center justify-center p-2 md:p-4">
-            {imageUrl ? (
+            {appStep === 'editingImage' && imageUrl ? (
               <Image
                 ref={imageRef}
                 src={imageUrl}
@@ -316,11 +324,11 @@ export function ImageWorkspace() {
             ) : (
               <div className="text-center text-muted-foreground flex flex-col items-center">
                 <ImageIcon className="w-16 h-16 mb-4" />
-                <p className="text-lg font-medium">Upload or capture an image to start stamping!</p>
+                <p className="text-lg font-medium">Step 1: Upload or capture an image to start stamping!</p>
                 <p className="text-sm">Your creative canvas awaits.</p>
               </div>
             )}
-            {imageUrl && baseImageSize && placedStamps.map((stamp) => (
+            {appStep === 'editingImage' && imageUrl && baseImageSize && placedStamps.map((stamp) => (
               <PlacedStamp
                 key={stamp.id}
                 data={stamp}
