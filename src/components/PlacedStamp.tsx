@@ -1,13 +1,14 @@
+
 'use client';
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, Ref } from 'react';
 import { useState, useEffect, useRef }
 from 'react';
 import Image from 'next/image';
 import { ResizableBox, type ResizableBoxProps, type ResizeHandleAxis } from 'react-resizable';
 import 'react-resizable/css/styles.css'; // Required for ResizableBox styles
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Trash2, Move, ZoomIn, ZoomOut } from 'lucide-react';
+import { RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface PlacedStampData {
@@ -63,15 +64,14 @@ export function PlacedStamp({
     }
     
     const target = e.target as HTMLElement;
-    if (target.closest('[data-control-button="true"]')) {
-      e.stopPropagation(); // Prevent workspace click if clicking on a control button
+    // Check if the target or its parent is a resize handle or a control button
+    if (target.closest('.react-resizable-handle') || target.closest('[data-control-button="true"]')) {
+      e.stopPropagation(); 
       return;
     }
-    // Resize handles have their own onMouseDown with e.stopPropagation(),
-    // so if event reaches here, it's for dragging the main body.
-    
+        
     e.preventDefault();
-    e.stopPropagation(); // Stop propagation to prevent workspace deselection or other parent handlers
+    e.stopPropagation(); 
 
     setIsDragging(true);
     setDragStart({
@@ -89,17 +89,14 @@ export function PlacedStamp({
     let newY = e.clientY - dragStart.y;
     
     const currentStampRef = stampRef.current;
-    // Ensure stampRef.current is valid and has getBoundingClientRect
     if (!currentStampRef || typeof currentStampRef.getBoundingClientRect !== 'function') {
-      console.error("stampRef.current.getBoundingClientRect is not a function", currentStampRef);
-      setIsDragging(false); // Stop dragging if ref is invalid
+      setIsDragging(false); 
       return;
     }
 
     const parentElement = currentStampRef.parentElement;
     if (parentElement) {
       const parentRect = parentElement.getBoundingClientRect();
-      // Ensure newX and newY are constrained within the parent's boundaries
       newX = Math.max(0, Math.min(newX, parentRect.width - size.width));
       newY = Math.max(0, Math.min(newY, parentRect.height - size.height));
     }
@@ -128,16 +125,15 @@ export function PlacedStamp({
       document.removeEventListener('mouseup', handleMouseUp);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging, dragStart, workspaceBounds, size]); // Added size to dependencies
+  }, [isDragging, dragStart, workspaceBounds, size, position.x, position.y]); 
 
   const handleResize: ResizableBoxProps['onResizeStop'] = (_event, { size: newSize }) => {
     setSize(newSize);
     onUpdate(data.id, { width: newSize.width, height: newSize.height });
-    // No need to call onSelect here, it should already be selected for resizing
   };
 
   const handleResizeStart: ResizableBoxProps['onResizeStart'] = (e) => {
-    e.stopPropagation(); // Prevent parent drag when starting resize
+    e.stopPropagation(); 
     if (!isSelected) {
       onSelect(data.id);
     }
@@ -150,8 +146,8 @@ export function PlacedStamp({
   };
 
   const handleScale = (factor: number) => {
-    const newWidth = Math.max(20, size.width * factor); // Min width 20px
-    const newHeight = Math.max(20, size.height * factor); // Min height 20px
+    const newWidth = Math.max(20, size.width * factor); 
+    const newHeight = Math.max(20, size.height * factor); 
     setSize({ width: newWidth, height: newHeight });
     onUpdate(data.id, { width: newWidth, height: newHeight });
   };
@@ -162,7 +158,7 @@ export function PlacedStamp({
     width: `${size.width}px`,
     height: `${size.height}px`,
     transform: `rotate(${rotation}deg)`,
-    zIndex: isSelected ? data.zIndex + 1000 : data.zIndex, // Bring selected to front
+    zIndex: isSelected ? data.zIndex + 1000 : data.zIndex, 
     position: 'absolute',
     cursor: isDragging ? 'grabbing' : (isSelected ? 'grab' : 'pointer'),
     border: isSelected ? '2px dashed hsl(var(--primary))' : 'none',
@@ -178,9 +174,9 @@ export function PlacedStamp({
       ref={stampRef}
       style={style}
       className={cn("group", isSelected ? "selected-stamp" : "")}
-      onMouseDown={handleMouseDown} // This handles drag start for the whole stamp
-      onClick={(e) => { // Ensure selection on click if not already selected
-        e.stopPropagation(); // Prevent workspace click
+      onMouseDown={handleMouseDown}
+      onClick={(e) => { 
+        e.stopPropagation(); 
         if (!isSelected) {
           onSelect(data.id);
         }
@@ -194,12 +190,12 @@ export function PlacedStamp({
         minConstraints={[30, 30 / aspectRatio]}
         maxConstraints={baseImageSize ? [baseImageSize.width, baseImageSize.height] : [800, 800 / aspectRatio]}
         lockAspectRatio={true}
-        draggableOpts={{ enableUserSelectHack: false }} // Draggable handled by parent div
-        // Remove onMouseDownCapture from ResizableBox if drag is handled by parent
-        handle={(handleAxis: ResizeHandleAxis) => (
+        draggableOpts={{ enableUserSelectHack: false }}
+        handle={(handleAxis: ResizeHandleAxis, handleRef: Ref<HTMLDivElement>) => (
           <div
-            key={handleAxis} // Add key for stability of handle elements
-            onMouseDown={(e) => e.stopPropagation()} // Prevent parent div's onMouseDown (drag) when interacting with resize handle
+            ref={handleRef}
+            key={handleAxis} 
+            onMouseDown={(e) => e.stopPropagation()}
             className={cn(
               `react-resizable-handle react-resizable-handle-${handleAxis}`,
               isSelected ? 'bg-primary opacity-100' : 'opacity-0 group-hover:opacity-50',
@@ -216,13 +212,12 @@ export function PlacedStamp({
           />
         )}
       >
-          {/* Inner content of ResizableBox, Image is direct child */}
           <div style={{ width: '100%', height: '100%', position: 'relative' }}>
             <Image
               src={data.imageUrl}
               alt={data.alt}
-              layout="fill"
-              objectFit="contain"
+              fill
+              style={{objectFit: 'contain'}}
               draggable={false}
               priority
             />
