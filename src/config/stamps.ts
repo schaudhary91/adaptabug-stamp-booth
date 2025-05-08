@@ -11,7 +11,7 @@ export const predefinedStamps: StampConfig[] = [
   {
     id: 'default-adsux-logo',
     name: 'ADS UX Logo', // Updated name
-    imageUrl: '/img/ads_ux_logo.png', // Updated image path
+    imageUrl: 'https://naadan-chords-music.s3.ap-south-1.amazonaws.com/ads-ux-logo-filled.png', // Updated image path
     alt: 'ADS UX Logo Stamp', // Updated alt text
     width: 80,
     height: 80,
