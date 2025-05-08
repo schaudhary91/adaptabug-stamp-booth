@@ -9,7 +9,8 @@ import { CameraCapture } from './CameraCapture';
 import { ImageControls } from './ImageControls';
 import { StampSelector } from './StampSelector';
 import { Card, CardContent } from '@/components/ui/card';
-import { ImageIcon, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ImageIcon, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button'; // Added for potential loading state on download
 
 export function ImageWorkspace() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -19,6 +20,8 @@ export function ImageWorkspace() {
   const [nextStampZIndex, setNextStampZIndex] = useState<number>(1);
   const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
   const [currentError, setCurrentError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
 
   const workspaceRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null); // Ref for the base image
@@ -124,17 +127,22 @@ export function ImageWorkspace() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!imageUrl || !workspaceRef.current || !imageRef.current || placedStamps.length === 0) {
       toast({ title: 'Download Error', description: 'Please add stamps to the image before downloading.', variant: 'destructive' });
       setCurrentError('Add stamps to the image to enable download.');
       return;
     }
     setCurrentError(null);
+    setIsDownloading(true);
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      toast({ title: 'Download Error', description: 'Could not create canvas for download.', variant: 'destructive' });
+      setIsDownloading(false);
+      return;
+    }
 
     const baseImg = imageRef.current;
     canvas.width = baseImg.naturalWidth;
@@ -152,35 +160,36 @@ export function ImageWorkspace() {
     const scaleX = baseImg.naturalWidth / imageClientWidth;
     const scaleY = baseImg.naturalHeight / imageClientHeight;
 
-
-    sortedStamps.forEach(async (stamp) => {
-      const stampImg = new window.Image();
-      stampImg.crossOrigin = "anonymous"; // Important for picsum or other CORS images
-      stampImg.src = stamp.imageUrl;
-      
-      // We need to wait for each stamp image to load before drawing
-      // This part could be improved with Promise.all for concurrent loading
-      // For simplicity, direct drawing is used, may need refinement for complex cases
-      
-      // Calculate position and size on the original image scale
-      const sx = stamp.x * scaleX;
-      const sy = stamp.y * scaleY;
-      const sWidth = stamp.width * scaleX;
-      const sHeight = stamp.height * scaleY;
-
-      ctx.save();
-      // Translate and rotate context for the stamp
-      // Rotation point should be center of the stamp
-      ctx.translate(sx + sWidth / 2, sy + sHeight / 2);
-      ctx.rotate((stamp.rotation * Math.PI) / 180);
-      ctx.drawImage(stampImg, -sWidth / 2, -sHeight / 2, sWidth, sHeight);
-      ctx.restore();
+    const loadImagePromises = sortedStamps.map(stamp => {
+      return new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = (err) => reject(new Error(`Failed to load stamp image: ${stamp.alt}. Error: ${err}`));
+        img.src = stamp.imageUrl;
+      });
     });
-    
-    // The drawing might not be complete immediately if stamp images are still loading.
-    // A more robust solution waits for all stamp images to load.
-    // For this example, we proceed with a slight delay, assuming quick loads.
-    setTimeout(() => {
+
+    try {
+      const loadedStampImages = await Promise.all(loadImagePromises);
+
+      loadedStampImages.forEach((stampImg, index) => {
+        const stamp = sortedStamps[index];
+        // Calculate position and size on the original image scale
+        const sx = stamp.x * scaleX;
+        const sy = stamp.y * scaleY;
+        const sWidth = stamp.width * scaleX;
+        const sHeight = stamp.height * scaleY;
+
+        ctx.save();
+        // Translate and rotate context for the stamp
+        // Rotation point should be center of the stamp
+        ctx.translate(sx + sWidth / 2, sy + sHeight / 2);
+        ctx.rotate((stamp.rotation * Math.PI) / 180);
+        ctx.drawImage(stampImg, -sWidth / 2, -sHeight / 2, sWidth, sHeight);
+        ctx.restore();
+      });
+
       const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = dataUrl;
@@ -189,7 +198,14 @@ export function ImageWorkspace() {
       link.click();
       document.body.removeChild(link);
       toast({ title: 'Image Downloaded!', description: 'Your masterpiece is saved.', className: 'bg-accent text-accent-foreground' });
-    }, 500); // Adjust delay if needed
+
+    } catch (error) {
+      console.error("Error loading stamp images for download:", error);
+      toast({ title: 'Download Error', description: `Failed to load some stamp images. Please try again. ${error instanceof Error ? error.message : ''}`, variant: 'destructive' });
+      setCurrentError('Could not load all stamp images for download.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
   
   const handleClearWorkspace = () => {
@@ -261,7 +277,8 @@ export function ImageWorkspace() {
         onDownload={handleDownload}
         onClear={handleClearWorkspace}
         isImageLoaded={!!imageUrl}
-        hasStamps={placedStamps.length > 0} // Pass hasStamps prop
+        hasStamps={placedStamps.length > 0}
+        isDownloading={isDownloading}
       />
       
       {currentError && (
