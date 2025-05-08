@@ -13,7 +13,7 @@ export function Header() {
           data-ai-hint="ads ux logo"
           priority
         />
-        <h1 className="text-3xl font-bold text-primary">Adaptabug Stamp-Booth</h1>
+        <h1 className="text-3xl font-bold text-primary logo-heading"><span>Adaptabug Stamp-Booth</span></h1>
       </div>
     </header>
   );
