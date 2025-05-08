@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -16,6 +17,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'naadan-chords-music.s3.ap-south-1.amazonaws.com',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };
