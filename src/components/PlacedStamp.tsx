@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { CSSProperties } from 'react';
@@ -61,20 +62,23 @@ export function PlacedStamp({
     if (!isSelected) {
       onSelect(data.id);
     }
-    // Check if the click is on a control button, if so, don't start drag
+    
     const target = e.target as HTMLElement;
     if (target.closest('[data-control-button="true"]')) {
+      e.stopPropagation(); // Prevent workspace click if clicking on a control button
       return;
     }
+    // Resize handles have their own onMouseDown with e.stopPropagation(),
+    // so if event reaches here, it's for dragging the main body.
     
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation(); // Stop propagation to prevent workspace deselection or other parent handlers
+
     setIsDragging(true);
     setDragStart({
       x: e.clientX - position.x,
       y: e.clientY - position.y,
     });
-    onSelect(data.id);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -84,12 +88,19 @@ export function PlacedStamp({
 
     let newX = e.clientX - dragStart.x;
     let newY = e.clientY - dragStart.y;
+    
+    const currentStampRef = stampRef.current;
+    // Ensure stampRef.current is valid and has getBoundingClientRect
+    if (typeof currentStampRef.getBoundingClientRect !== 'function') {
+      console.error("stampRef.current.getBoundingClientRect is not a function", currentStampRef);
+      setIsDragging(false); // Stop dragging if ref is invalid
+      return;
+    }
 
-    // Constrain within workspace (relative to workspaceBounds)
-    const stampRect = stampRef.current.getBoundingClientRect();
-    const parentRect = stampRef.current.parentElement?.getBoundingClientRect();
-
-    if (parentRect) {
+    const parentElement = currentStampRef.parentElement;
+    if (parentElement) {
+      const parentRect = parentElement.getBoundingClientRect();
+      // Ensure newX and newY are constrained within the parent's boundaries
       newX = Math.max(0, Math.min(newX, parentRect.width - size.width));
       newY = Math.max(0, Math.min(newY, parentRect.height - size.height));
     }
@@ -118,12 +129,20 @@ export function PlacedStamp({
       document.removeEventListener('mouseup', handleMouseUp);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging, dragStart, workspaceBounds]);
+  }, [isDragging, dragStart, workspaceBounds, size]); // Added size to dependencies
 
   const handleResize: ResizableBoxProps['onResizeStop'] = (_event, { size: newSize }) => {
     setSize(newSize);
     onUpdate(data.id, { width: newSize.width, height: newSize.height });
+    // No need to call onSelect here, it should already be selected for resizing
   };
+
+  const handleResizeStart: ResizableBoxProps['onResizeStart'] = (e) => {
+    e.stopPropagation(); // Prevent parent drag when starting resize
+    if (!isSelected) {
+      onSelect(data.id);
+    }
+  }
 
   const handleRotate = (degrees: number) => {
     const newRotation = (rotation + degrees) % 360;
@@ -146,7 +165,7 @@ export function PlacedStamp({
     transform: `rotate(${rotation}deg)`,
     zIndex: isSelected ? data.zIndex + 1000 : data.zIndex, // Bring selected to front
     position: 'absolute',
-    cursor: isDragging ? 'grabbing' : 'grab',
+    cursor: isDragging ? 'grabbing' : (isSelected ? 'grab' : 'pointer'),
     border: isSelected ? '2px dashed hsl(var(--primary))' : 'none',
     boxSizing: 'border-box',
     transition: isDragging ? 'none' : 'box-shadow 0.2s ease-in-out, border 0.2s ease-in-out',
@@ -156,63 +175,78 @@ export function PlacedStamp({
   const aspectRatio = data.width / data.height;
 
   return (
-    <ResizableBox
-      width={size.width}
-      height={size.height}
-      onResizeStop={handleResize}
-      minConstraints={[30, 30 / aspectRatio]}
-      maxConstraints={baseImageSize ? [baseImageSize.width, baseImageSize.height] : [800, 800 / aspectRatio]}
-      lockAspectRatio={true}
-      style={style}
-      handle={(handleAxis) => (
-        <div
-          className={cn(
-            `react-resizable-handle react-resizable-handle-${handleAxis}`,
-            isSelected ? 'bg-primary opacity-100' : 'opacity-0 group-hover:opacity-50',
-            'transition-opacity'
-          )}
-          style={{
-            width: '10px', height: '10px', borderRadius: '50%',
-            position: 'absolute',
-            ...(handleAxis === 'se' && { bottom: '-5px', right: '-5px', cursor: 'nwse-resize' }),
-            ...(handleAxis === 'sw' && { bottom: '-5px', left: '-5px', cursor: 'nesw-resize' }),
-            ...(handleAxis === 'ne' && { top: '-5px', right: '-5px', cursor: 'nesw-resize' }),
-            ...(handleAxis === 'nw' && { top: '-5px', left: '-5px', cursor: 'nwse-resize' }),
-          }}
-        />
-      )}
-      draggableOpts={{ enableUserSelectHack: false }}
-      onMouseDownCapture={handleMouseDown} // Use capture phase for ResizableBox
+    <div
       ref={stampRef}
-      className="group"
+      style={style}
+      className={cn("group", isSelected ? "selected-stamp" : "")}
+      onMouseDown={handleMouseDown} // This handles drag start for the whole stamp
+      onClick={(e) => { // Ensure selection on click if not already selected
+        e.stopPropagation(); // Prevent workspace click
+        if (!isSelected) {
+          onSelect(data.id);
+        }
+      }}
     >
-        <Image
-          src={data.imageUrl}
-          alt={data.alt}
-          layout="fill"
-          objectFit="contain"
-          draggable={false}
-          priority
-        />
-        {isSelected && (
-          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 flex gap-1 p-1 bg-card rounded-md shadow-lg border border-border" data-control-button="true">
-            <Button variant="ghost" size="icon" onClick={() => handleRotate(-15)} title="Rotate Left" aria-label="Rotate stamp left">
-              <RotateCcw className="h-4 w-4 transform scale-x-[-1]" />
-            </Button>
-             <Button variant="ghost" size="icon" onClick={() => handleRotate(15)} title="Rotate Right" aria-label="Rotate stamp right">
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-             <Button variant="ghost" size="icon" onClick={() => handleScale(1.1)} title="Zoom In" aria-label="Zoom in stamp">
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-             <Button variant="ghost" size="icon" onClick={() => handleScale(0.9)} title="Zoom Out" aria-label="Zoom out stamp">
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => onDelete(data.id)} title="Delete Stamp" className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Delete stamp">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+      <ResizableBox
+        width={size.width}
+        height={size.height}
+        onResizeStop={handleResize}
+        onResizeStart={handleResizeStart}
+        minConstraints={[30, 30 / aspectRatio]}
+        maxConstraints={baseImageSize ? [baseImageSize.width, baseImageSize.height] : [800, 800 / aspectRatio]}
+        lockAspectRatio={true}
+        draggableOpts={{ enableUserSelectHack: false }} // Draggable handled by parent div
+        // Remove onMouseDownCapture from ResizableBox if drag is handled by parent
+        handle={(handleAxis) => (
+          <div
+            onMouseDown={(e) => e.stopPropagation()} // Prevent parent div's onMouseDown (drag) when interacting with resize handle
+            className={cn(
+              `react-resizable-handle react-resizable-handle-${handleAxis}`,
+              isSelected ? 'bg-primary opacity-100' : 'opacity-0 group-hover:opacity-50',
+              'transition-opacity'
+            )}
+            style={{
+              width: '10px', height: '10px', borderRadius: '50%',
+              position: 'absolute',
+              ...(handleAxis === 'se' && { bottom: '-5px', right: '-5px', cursor: 'nwse-resize' }),
+              ...(handleAxis === 'sw' && { bottom: '-5px', left: '-5px', cursor: 'nesw-resize' }),
+              ...(handleAxis === 'ne' && { top: '-5px', right: '-5px', cursor: 'nesw-resize' }),
+              ...(handleAxis === 'nw' && { top: '-5px', left: '-5px', cursor: 'nwse-resize' }),
+            }}
+          />
         )}
-    </ResizableBox>
+      >
+          {/* Inner content of ResizableBox, Image is direct child */}
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <Image
+              src={data.imageUrl}
+              alt={data.alt}
+              layout="fill"
+              objectFit="contain"
+              draggable={false}
+              priority
+            />
+          </div>
+      </ResizableBox>
+      {isSelected && (
+        <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 flex gap-1 p-1 bg-card rounded-md shadow-lg border border-border" data-control-button="true" onMouseDown={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" onClick={() => handleRotate(-15)} title="Rotate Left" aria-label="Rotate stamp left">
+            <RotateCcw className="h-4 w-4 transform scale-x-[-1]" />
+          </Button>
+           <Button variant="ghost" size="icon" onClick={() => handleRotate(15)} title="Rotate Right" aria-label="Rotate stamp right">
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+           <Button variant="ghost" size="icon" onClick={() => handleScale(1.1)} title="Zoom In" aria-label="Zoom in stamp">
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+           <Button variant="ghost" size="icon" onClick={() => handleScale(0.9)} title="Zoom Out" aria-label="Zoom out stamp">
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(data.id); }} title="Delete Stamp" className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Delete stamp">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
