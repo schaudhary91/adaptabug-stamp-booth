@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, type DragEvent, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type DragEvent, type ChangeEvent, useCallback } from 'react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { predefinedStamps, type StampConfig } from '@/config/stamps';
@@ -9,8 +9,7 @@ import { CameraCapture } from './CameraCapture';
 import { ImageControls } from './ImageControls';
 import { StampSelector } from './StampSelector';
 import { Card, CardContent } from '@/components/ui/card';
-import { ImageIcon, CheckCircle, AlertTriangle, Edit3, Download, CircleArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ImageIcon, CheckCircle, AlertTriangle } from 'lucide-react';
 
 
 type AppStep = 'awaitingImage' | 'editingImage' | 'finalizingImage';
@@ -31,6 +30,42 @@ export function ImageWorkspace() {
   const imageRef = useRef<HTMLImageElement>(null); // Ref for the base image
   const { toast } = useToast();
 
+  const addDefaultStamp = useCallback((loadedBaseImageSize: { width: number; height: number }) => {
+    const defaultStampConfig = predefinedStamps.find(s => s.id === 'default-adsux-logo');
+    if (!defaultStampConfig || !workspaceRef.current) return;
+
+    const workspaceRect = workspaceRef.current.getBoundingClientRect();
+    if (!workspaceRect) return;
+
+    const margin = 10;
+    const stampWidth = defaultStampConfig.width;
+    const stampHeight = defaultStampConfig.height;
+
+    // Position bottom right of the image display area (workspaceRect)
+    let initialX = workspaceRect.width - stampWidth - margin;
+    let initialY = workspaceRect.height - stampHeight - margin;
+
+    initialX = Math.max(0, Math.min(initialX, workspaceRect.width - stampWidth));
+    initialY = Math.max(0, Math.min(initialY, workspaceRect.height - stampHeight));
+
+    const newStamp: PlacedStampData = {
+      id: `stamp-default-${Date.now()}`,
+      stampId: defaultStampConfig.id,
+      imageUrl: defaultStampConfig.imageUrl,
+      alt: defaultStampConfig.alt,
+      x: initialX,
+      y: initialY,
+      width: stampWidth,
+      height: stampHeight,
+      rotation: 0,
+      zIndex: 1, // Default stamp is at zIndex 1
+    };
+    
+    setPlacedStamps([newStamp]); // Start with only the default stamp
+    setNextStampZIndex(2); // Subsequent user-added stamps start at zIndex 2
+  }, [workspaceRef]);
+
+
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     setCurrentError(null);
     const file = event.target.files?.[0];
@@ -48,30 +83,36 @@ export function ImageWorkspace() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImageUrl(reader.result as string);
-        setPlacedStamps([]); // Clear stamps on new image
+        setBaseImageSize(null); // Reset to trigger onLoad and default stamp placement
+        setPlacedStamps([]); 
         setSelectedStampId(null);
-        setNextStampZIndex(1);
-        // Do not change appStep here, handleContinueToEditing will do it
+        setNextStampZIndex(1); // Reset, will be adjusted by addDefaultStamp
         toast({ title: 'Image Selected', description: 'Image is ready. Click "Continue to Stamping" to proceed.', className: 'bg-accent text-accent-foreground' });
       };
       reader.readAsDataURL(file);
     }
-    event.target.value = ''; // Reset file input
+    event.target.value = ''; 
   };
 
   const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
     const img = event.currentTarget;
-    setBaseImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+    const newBaseImageSize = { width: img.naturalWidth, height: img.naturalHeight };
+    setBaseImageSize(newBaseImageSize);
+    // Add default stamp when new image is loaded and its dimensions are known
+    // This relies on placedStamps being empty for a new image, which handleImageUpload/Capture ensures.
+    if (placedStamps.length === 0) {
+      addDefaultStamp(newBaseImageSize);
+    }
   };
 
   const handleCapture = (dataUrl: string) => {
     setCurrentError(null);
     setImageUrl(dataUrl);
+    setBaseImageSize(null); // Reset to trigger onLoad and default stamp placement
     setPlacedStamps([]);
     setSelectedStampId(null);
-    setNextStampZIndex(1);
+    setNextStampZIndex(1); // Reset, will be adjusted by addDefaultStamp
     setIsCameraOpen(false);
-     // Do not change appStep here
     toast({ title: 'Image Captured', description: 'Photo taken successfully! Click "Continue to Stamping".', className: 'bg-accent text-accent-foreground' });
   };
   
@@ -87,13 +128,14 @@ export function ImageWorkspace() {
   };
 
   const handleProceedToDownload = () => {
+    // Default stamp counts as "hasStamps"
     if (placedStamps.length === 0) {
       toast({ title: 'No Stamps Added', description: 'Please add at least one stamp to your image before proceeding.', variant: 'destructive' });
       setCurrentError('Add at least one stamp to proceed to the download step.');
       return;
     }
     setCurrentError(null);
-    setSelectedStampId(null); // Deselect any stamp
+    setSelectedStampId(null); 
     setAppStep('finalizingImage');
     toast({ title: 'Ready to Finalize', description: 'Your image is ready for download or further actions.', className: 'bg-accent text-accent-foreground' });
   };
@@ -105,7 +147,7 @@ export function ImageWorkspace() {
 
 
   const handleStampSelect = (stampConfig: StampConfig) => {
-    if (!imageUrl || appStep !== 'editingImage') { // Ensure we are in editing step
+    if (!imageUrl || appStep !== 'editingImage') { 
       toast({ title: 'Action Not Allowed', description: 'Cannot add stamps in the current step.', variant: 'destructive' });
       setCurrentError('Stamps can only be added during the "editing" phase.');
       return;
@@ -166,15 +208,15 @@ export function ImageWorkspace() {
       return;
     }
     if (placedStamps.length === 0) {
-       toast({ title: 'Download Error', description: 'Please add stamps to the image before downloading.', variant: 'destructive' });
-       setCurrentError('Add stamps to the image to enable download.');
+       toast({ title: 'Download Error', description: 'Image must have at least one stamp (e.g., the default logo) to download.', variant: 'destructive' });
+       setCurrentError('Image must have stamps to enable download.');
        return;
     }
     setCurrentError(null);
     setIsDownloading(true);
     setSelectedStampId(null); 
     
-    await new Promise(resolve => setTimeout(resolve, 100)); // Increased delay for UI updates
+    await new Promise(resolve => setTimeout(resolve, 250)); 
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -203,7 +245,10 @@ export function ImageWorkspace() {
         const img = new window.Image();
         img.crossOrigin = "anonymous"; 
         img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`Failed to load stamp image: ${stamp.alt} (URL: ${stamp.imageUrl})`));
+        img.onerror = (e) => {
+          console.error(`Error loading stamp image: ${stamp.alt}`, e);
+          reject(new Error(`Failed to load stamp image: ${stamp.alt}.`));
+        }
         img.src = stamp.imageUrl;
       });
     });
@@ -260,7 +305,7 @@ export function ImageWorkspace() {
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    if (!imageUrl || appStep !== 'editingImage') { // Ensure we are in editing step for drop
+    if (!imageUrl || appStep !== 'editingImage') { 
       toast({ title: 'Action Not Allowed', description: 'Cannot drop stamps in the current step.', variant: 'destructive' });
       setCurrentError('Stamps can only be dropped during the "editing" phase.');
       return;
@@ -310,7 +355,7 @@ export function ImageWorkspace() {
         onDownload={handleDownload}
         onClear={handleClearWorkspace}
         isImageLoaded={!!imageUrl}
-        hasStamps={placedStamps.length > 0}
+        hasStamps={placedStamps.length > 0} 
         isDownloading={isDownloading}
         appStep={appStep}
         onContinueToEditing={handleContinueToEditing}
@@ -340,7 +385,7 @@ export function ImageWorkspace() {
                     {appStep === 'editingImage' ? 'Step 2: Add & Edit Stamps' : 'Step 3: Finalize & Download'}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                    {appStep === 'editingImage' ? 'Select stamps, drag, resize, and rotate them on your image.' : 'Review your creation. Download it or go back to make more changes.'}
+                    {appStep === 'editingImage' ? 'Select stamps, drag, resize, and rotate them on your image. The ADS UX logo is added by default.' : 'Review your creation. Download it or go back to make more changes.'}
                 </p>
             </div>
         )}
@@ -381,7 +426,7 @@ export function ImageWorkspace() {
                 isSelected={selectedStampId === stamp.id}
                 workspaceBounds={workspaceRef.current?.getBoundingClientRect() ?? null}
                 baseImageSize={baseImageSize}
-                isInteractive={appStep === 'editingImage'} // Stamps are only interactive in editing step
+                isInteractive={appStep === 'editingImage'} 
               />
             ))}
           </CardContent>
@@ -396,4 +441,3 @@ export function ImageWorkspace() {
     </div>
   );
 }
-
