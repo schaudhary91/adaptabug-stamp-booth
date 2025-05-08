@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, type DragEvent, type ChangeEvent, useCallback } from 'react';
@@ -30,23 +31,26 @@ export function ImageWorkspace() {
   const imageRef = useRef<HTMLImageElement>(null); // Ref for the base image
   const { toast } = useToast();
 
-  const addDefaultStamp = useCallback((loadedBaseImageSize: { width: number; height: number }) => {
+  const addDefaultStamp = useCallback((_loadedBaseImageSize: { width: number; height: number }) => {
     const defaultStampConfig = predefinedStamps.find(s => s.id === 'default-adsux-logo');
     if (!defaultStampConfig || !workspaceRef.current) return;
 
     const workspaceRect = workspaceRef.current.getBoundingClientRect();
     if (!workspaceRect) return;
 
-    const margin = 10;
     const stampWidth = defaultStampConfig.width;
     const stampHeight = defaultStampConfig.height;
 
-    // Position bottom right of the image display area (workspaceRect)
-    let initialX = workspaceRect.width - stampWidth - margin;
-    let initialY = workspaceRect.height - stampHeight - margin;
+    // Position top left, 20px from top and 20px from left
+    const desiredInitialX = 20;
+    const desiredInitialY = 20;
+    
+    // Ensure the stamp stays within bounds if workspace is too small
+    // initialX will be 20, unless (workspace width - stamp width) is less than 20, then it will be that smaller value.
+    // If (workspace width - stamp width) is negative (stamp wider than workspace), initialX will be 0.
+    let initialX = Math.max(0, Math.min(desiredInitialX, workspaceRect.width - stampWidth));
+    let initialY = Math.max(0, Math.min(desiredInitialY, workspaceRect.height - stampHeight));
 
-    initialX = Math.max(0, Math.min(initialX, workspaceRect.width - stampWidth));
-    initialY = Math.max(0, Math.min(initialY, workspaceRect.height - stampHeight));
 
     const newStamp: PlacedStampData = {
       id: `stamp-default-${Date.now()}`,
@@ -100,7 +104,7 @@ export function ImageWorkspace() {
     setBaseImageSize(newBaseImageSize);
     // Add default stamp when new image is loaded and its dimensions are known
     // This relies on placedStamps being empty for a new image, which handleImageUpload/Capture ensures.
-    if (placedStamps.length === 0) {
+    if (placedStamps.length === 0 && imageUrl) { // Ensure imageUrl is also present
       addDefaultStamp(newBaseImageSize);
     }
   };
@@ -216,7 +220,8 @@ export function ImageWorkspace() {
     setIsDownloading(true);
     setSelectedStampId(null); 
     
-    await new Promise(resolve => setTimeout(resolve, 250)); 
+    // Ensure DOM updates (like removing selection outline) are processed before canvas operations
+    await new Promise(resolve => setTimeout(resolve, 50)); 
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -247,7 +252,8 @@ export function ImageWorkspace() {
         img.onload = () => resolve(img);
         img.onerror = (e) => {
           console.error(`Error loading stamp image: ${stamp.alt}`, e);
-          reject(new Error(`Failed to load stamp image: ${stamp.alt}.`));
+          const errorMsg = e instanceof Event ? 'Network or CORS error' : (e as ErrorEvent).message;
+          reject(new Error(`Failed to load stamp image: ${stamp.alt}. Error: ${errorMsg}`));
         }
         img.src = stamp.imageUrl;
       });
@@ -441,3 +447,4 @@ export function ImageWorkspace() {
     </div>
   );
 }
+
