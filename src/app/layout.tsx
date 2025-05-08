@@ -8,7 +8,7 @@ const geistSans = GeistSans;
 // const geistMono = GeistMono; // Removed this line
 
 export const metadata: Metadata = {
-  title: 'StampBooth',
+  title: 'Adaptabug Stamp-Booth',
   description: 'Create fun photos with stamps!',
 };
 

@@ -9,7 +9,7 @@ export default function StampBoothPage() {
         <ImageWorkspace />
       </main>
       <footer className="py-4 text-center text-sm text-muted-foreground border-t">
-        <p>&copy; {new Date().getFullYear()} StampBooth. Create with fun!</p>
+        <p>&copy; {new Date().getFullYear()} Adaptabug Stamp-Booth. Create with fun!</p>
       </footer>
     </div>
   );
