@@ -12,6 +12,7 @@ interface ImageControlsProps {
   onToggleProperties?: () => void;
   showPropertiesToggle?: boolean;
   isImageLoaded: boolean;
+  hasStamps: boolean; // New prop
 }
 
 export function ImageControls({
@@ -22,6 +23,7 @@ export function ImageControls({
   onToggleProperties,
   showPropertiesToggle = false,
   isImageLoaded,
+  hasStamps, // Destructure new prop
 }: ImageControlsProps) {
   return (
     <div className="p-4 bg-card border-b shadow-sm">
@@ -39,7 +41,7 @@ export function ImageControls({
         <Button onClick={onCapture} aria-label="Take picture">
           <Camera className="mr-2 h-4 w-4" /> Take Picture
         </Button>
-        <Button onClick={onDownload} disabled={!isImageLoaded} aria-label="Download image">
+        <Button onClick={onDownload} disabled={!isImageLoaded || !hasStamps} aria-label="Download image">
           <Download className="mr-2 h-4 w-4" /> Download
         </Button>
         <Button variant="outline" onClick={onClear} disabled={!isImageLoaded} aria-label="Clear workspace">

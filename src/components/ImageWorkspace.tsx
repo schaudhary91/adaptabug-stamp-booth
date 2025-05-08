@@ -125,7 +125,11 @@ export function ImageWorkspace() {
   };
 
   const handleDownload = () => {
-    if (!imageUrl || !workspaceRef.current || !imageRef.current) return;
+    if (!imageUrl || !workspaceRef.current || !imageRef.current || placedStamps.length === 0) {
+      toast({ title: 'Download Error', description: 'Please add stamps to the image before downloading.', variant: 'destructive' });
+      setCurrentError('Add stamps to the image to enable download.');
+      return;
+    }
     setCurrentError(null);
 
     const canvas = document.createElement('canvas');
@@ -257,6 +261,7 @@ export function ImageWorkspace() {
         onDownload={handleDownload}
         onClear={handleClearWorkspace}
         isImageLoaded={!!imageUrl}
+        hasStamps={placedStamps.length > 0} // Pass hasStamps prop
       />
       
       {currentError && (
