@@ -181,7 +181,6 @@ export function ImageWorkspace() {
     toast({
       title: `${stampConfig.name} Added!`,
       description: 'Drag, resize, and rotate your new stamp.',
-      icon: <CheckCircle className="h-5 w-5 text-green-500" />,
     });
   };
 
@@ -347,7 +346,6 @@ export function ImageWorkspace() {
       toast({
         title: `${stampConfig.name} Added!`,
         description: 'Stamp dropped onto the image.',
-        icon: <CheckCircle className="h-5 w-5 text-green-500" />,
       });
     }
   };
