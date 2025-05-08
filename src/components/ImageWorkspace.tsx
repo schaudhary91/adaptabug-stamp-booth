@@ -251,7 +251,7 @@ export function ImageWorkspace() {
         img.onload = () => resolve(img);
         img.onerror = (e) => {
           console.error(`Error loading stamp image: ${stamp.alt}`, e);
-          const errorMsg = e instanceof Event ? 'Network or CORS error' : (e as ErrorEvent).message;
+          const errorMsg = e instanceof Event ? 'Network or CORS error' : 'Error';
           reject(new Error(`Failed to load stamp image: ${stamp.alt}. Error: ${errorMsg}`));
         }
         img.src = stamp.imageUrl;
