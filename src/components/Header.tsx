@@ -5,8 +5,8 @@ export function Header() {
     <header className="py-6 px-4 md:px-8 border-b bg-card shadow-sm">
       <div className="container mx-auto flex items-center gap-3">
         <Image
-          src="https://picsum.photos/seed/adsuxapplogo/64/64"
-          alt="Adaptabug Stamp-Booth Logo"
+          src="/img/ads_ux_logo.png" 
+          alt="ADS UX Logo"
           width={48}
           height={48}
           className="rounded"

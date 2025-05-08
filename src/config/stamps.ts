@@ -10,9 +10,9 @@ export interface StampConfig {
 export const predefinedStamps: StampConfig[] = [
   {
     id: 'default-adsux-logo',
-    name: 'ADS UX Logo',
-    imageUrl: 'https://picsum.photos/seed/adsuxdefaultstamp/100/100', // Placeholder for the ADS UX logo
-    alt: 'ADS UX Default Stamp',
+    name: 'ADS UX Logo', // Updated name
+    imageUrl: '/img/ads_ux_logo.png', // Updated image path
+    alt: 'ADS UX Logo Stamp', // Updated alt text
     width: 80,
     height: 80,
   },
