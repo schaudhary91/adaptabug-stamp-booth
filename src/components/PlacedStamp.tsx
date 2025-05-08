@@ -1,11 +1,10 @@
-
 'use client';
 
 import type { CSSProperties } from 'react';
 import { useState, useEffect, useRef }
 from 'react';
 import Image from 'next/image';
-import { ResizableBox, type ResizableBoxProps } from 'react-resizable';
+import { ResizableBox, type ResizableBoxProps, type ResizeHandleAxis } from 'react-resizable';
 import 'react-resizable/css/styles.css'; // Required for ResizableBox styles
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Trash2, Move, ZoomIn, ZoomOut } from 'lucide-react';
@@ -91,7 +90,7 @@ export function PlacedStamp({
     
     const currentStampRef = stampRef.current;
     // Ensure stampRef.current is valid and has getBoundingClientRect
-    if (typeof currentStampRef.getBoundingClientRect !== 'function') {
+    if (!currentStampRef || typeof currentStampRef.getBoundingClientRect !== 'function') {
       console.error("stampRef.current.getBoundingClientRect is not a function", currentStampRef);
       setIsDragging(false); // Stop dragging if ref is invalid
       return;
@@ -197,8 +196,9 @@ export function PlacedStamp({
         lockAspectRatio={true}
         draggableOpts={{ enableUserSelectHack: false }} // Draggable handled by parent div
         // Remove onMouseDownCapture from ResizableBox if drag is handled by parent
-        handle={(handleAxis) => (
+        handle={(handleAxis: ResizeHandleAxis) => (
           <div
+            key={handleAxis} // Add key for stability of handle elements
             onMouseDown={(e) => e.stopPropagation()} // Prevent parent div's onMouseDown (drag) when interacting with resize handle
             className={cn(
               `react-resizable-handle react-resizable-handle-${handleAxis}`,
