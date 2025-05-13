@@ -32,6 +32,7 @@ interface PlacedStampProps {
   isSelected: boolean;
   workspaceBounds: DOMRect | null;
   baseImageSize: { width: number; height: number } | null;
+  isInteractive: boolean; // Added prop
 }
 
 export function PlacedStamp({
@@ -42,6 +43,7 @@ export function PlacedStamp({
   isSelected,
   workspaceBounds,
   baseImageSize,
+  isInteractive, // Destructured prop
 }: PlacedStampProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -59,6 +61,8 @@ export function PlacedStamp({
 
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isInteractive) return; // Only allow interaction if interactive
+
     if (!isSelected) {
       onSelect(data.id);
     }
@@ -81,7 +85,7 @@ export function PlacedStamp({
   };
 
   const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging || !workspaceBounds || !stampRef.current) return;
+    if (!isInteractive || !isDragging || !workspaceBounds || !stampRef.current) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -105,7 +109,7 @@ export function PlacedStamp({
   };
 
   const handleMouseUp = (e: MouseEvent) => {
-    if (!isDragging) return;
+    if (!isInteractive || !isDragging) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -113,7 +117,7 @@ export function PlacedStamp({
   };
 
   useEffect(() => {
-    if (isDragging) {
+    if (isInteractive && isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     } else {
@@ -125,14 +129,20 @@ export function PlacedStamp({
       document.removeEventListener('mouseup', handleMouseUp);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging, dragStart, workspaceBounds, size, position.x, position.y]); 
+  }, [isInteractive, isDragging, dragStart, workspaceBounds, size, position.x, position.y]); 
 
   const handleResize: ResizableBoxProps['onResizeStop'] = (_event, { size: newSize }) => {
+    if (!isInteractive) return;
     setSize(newSize);
     onUpdate(data.id, { width: newSize.width, height: newSize.height });
   };
 
   const handleResizeStart: ResizableBoxProps['onResizeStart'] = (e) => {
+    if (!isInteractive) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     e.stopPropagation(); 
     if (!isSelected) {
       onSelect(data.id);
@@ -140,12 +150,14 @@ export function PlacedStamp({
   }
 
   const handleRotate = (degrees: number) => {
+    if (!isInteractive) return;
     const newRotation = (rotation + degrees) % 360;
     setRotation(newRotation);
     onUpdate(data.id, { rotation: newRotation });
   };
 
   const handleScale = (factor: number) => {
+    if (!isInteractive) return;
     const newWidth = Math.max(20, size.width * factor); 
     const newHeight = Math.max(20, size.height * factor); 
     setSize({ width: newWidth, height: newHeight });
@@ -160,11 +172,11 @@ export function PlacedStamp({
     transform: `rotate(${rotation}deg)`,
     zIndex: isSelected ? data.zIndex + 1000 : data.zIndex, 
     position: 'absolute',
-    cursor: isDragging ? 'grabbing' : (isSelected ? 'grab' : 'pointer'),
-    border: isSelected ? '2px dashed hsl(var(--primary))' : 'none',
+    cursor: !isInteractive ? 'default' : (isDragging ? 'grabbing' : (isSelected ? 'grab' : 'pointer')),
+    border: isInteractive && isSelected ? '2px dashed hsl(var(--primary))' : 'none',
     boxSizing: 'border-box',
     transition: isDragging ? 'none' : 'box-shadow 0.2s ease-in-out, border 0.2s ease-in-out',
-    boxShadow: isSelected ? '0 0 10px hsla(var(--primary), 0.5)' : 'none',
+    boxShadow: isInteractive && isSelected ? '0 0 10px hsla(var(--primary), 0.5)' : 'none',
   };
   
   const aspectRatio = data.width / data.height;
@@ -173,10 +185,11 @@ export function PlacedStamp({
     <div
       ref={stampRef}
       style={style}
-      className={cn("group", isSelected ? "selected-stamp" : "")}
+      className={cn("group", isInteractive && isSelected ? "selected-stamp" : "")}
       onMouseDown={handleMouseDown}
       onClick={(e) => { 
         e.stopPropagation(); 
+        if (!isInteractive) return;
         if (!isSelected) {
           onSelect(data.id);
         }
@@ -198,7 +211,7 @@ export function PlacedStamp({
             onMouseDown={(e) => e.stopPropagation()}
             className={cn(
               `react-resizable-handle react-resizable-handle-${handleAxis}`,
-              isSelected ? 'bg-primary opacity-100' : 'opacity-0 group-hover:opacity-50',
+              (isInteractive && isSelected) ? 'bg-primary opacity-100' : 'hidden',
               'transition-opacity'
             )}
             style={{
@@ -223,7 +236,7 @@ export function PlacedStamp({
             />
           </div>
       </ResizableBox>
-      {isSelected && (
+      {isInteractive && isSelected && (
         <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 flex gap-1 p-1 bg-card rounded-md shadow-lg border border-border" data-control-button="true" onMouseDown={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" onClick={() => handleRotate(-15)} title="Rotate Left" aria-label="Rotate stamp left">
             <RotateCcw className="h-4 w-4 transform scale-x-[-1]" />
