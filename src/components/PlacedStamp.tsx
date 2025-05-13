@@ -5,7 +5,7 @@ import type { CSSProperties, Ref } from 'react';
 import { useState, useEffect, useRef }
 from 'react';
 import Image from 'next/image';
-import { ResizableBox, type ResizableBoxProps, type ResizeHandleAxis } from 'react-resizable';
+import { ResizableBox, type ResizableBoxProps, type ResizeHandle } from 'react-resizable';
 import 'react-resizable/css/styles.css'; // Required for ResizableBox styles
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
@@ -204,23 +204,23 @@ export function PlacedStamp({
         maxConstraints={baseImageSize ? [baseImageSize.width, baseImageSize.height] : [800, 800 / aspectRatio]}
         lockAspectRatio={true}
         draggableOpts={{ enableUserSelectHack: false }}
-        handle={(handleAxis: ResizeHandleAxis, handleRef: Ref<HTMLDivElement>) => (
+        handle={(handle: ResizeHandle, handleRef: Ref<HTMLDivElement>) => (
           <div
-            ref={handleRef}
-            key={handleAxis} 
+            ref={handleRef as Ref<HTMLDivElement>}
+            key={handle}
             onMouseDown={(e) => e.stopPropagation()}
             className={cn(
-              `react-resizable-handle react-resizable-handle-${handleAxis}`,
+              `react-resizable-handle react-resizable-handle-${handle}`,
               (isInteractive && isSelected) ? 'bg-primary opacity-100' : 'hidden',
               'transition-opacity'
             )}
             style={{
               width: '10px', height: '10px', borderRadius: '50%',
               position: 'absolute',
-              ...(handleAxis === 'se' && { bottom: '-5px', right: '-5px', cursor: 'nwse-resize' }),
-              ...(handleAxis === 'sw' && { bottom: '-5px', left: '-5px', cursor: 'nesw-resize' }),
-              ...(handleAxis === 'ne' && { top: '-5px', right: '-5px', cursor: 'nesw-resize' }),
-              ...(handleAxis === 'nw' && { top: '-5px', left: '-5px', cursor: 'nwse-resize' }),
+              ...(handle === 'se' && { bottom: '-5px', right: '-5px', cursor: 'nwse-resize' }),
+              ...(handle === 'sw' && { bottom: '-5px', left: '-5px', cursor: 'nesw-resize' }),
+              ...(handle === 'ne' && { top: '-5px', right: '-5px', cursor: 'nesw-resize' }),
+              ...(handle === 'nw' && { top: '-5px', left: '-5px', cursor: 'nwse-resize' }),
             }}
           />
         )}
